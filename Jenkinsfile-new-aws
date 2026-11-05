@@ -1,0 +1,74 @@
+
+pipeline {
+    agent any
+
+    environment {
+        TOMCAT_URL        = 'http://172.31.41.144:8080'
+        TOMCAT_PUBLIC_URL = 'http://35.181.249.17:8080'
+        CONTEXT_PATH      = '/troy-trends'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Pulling source code from GitHub...'
+                git branch: 'main',
+                    credentialsId: 'github-pat',
+                    url: 'https://github.com/Naomie-tech/troy-trends.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Compiling the application...'
+                sh 'mvn -B clean compile'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running tests...'
+                sh 'mvn -B test'
+            }
+        }
+
+        stage('Package') {
+            steps {
+                echo 'Packaging into WAR file...'
+                sh 'mvn -B package -DskipTests'
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                echo "Deploying to ${TOMCAT_URL}..."
+
+                deploy adapters: [
+                    tomcat9(
+                        credentialsId: 'TomcatCreds',
+                        url: "${TOMCAT_URL}"
+                    )
+                ],
+                contextPath: "${CONTEXT_PATH}",
+                war: 'target/devops-trends.war'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment successful!'
+            echo "Tomcat private URL: ${TOMCAT_URL}${CONTEXT_PATH}"
+            echo "Application URL: ${TOMCAT_PUBLIC_URL}${CONTEXT_PATH}"
+        }
+
+        failure {
+            echo 'Pipeline failed. Check console output.'
+        }
+
+        always {
+            echo 'Cleaning Jenkins workspace...'
+            deleteDir()
+        }
+    }
+}
